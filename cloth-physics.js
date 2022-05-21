@@ -208,15 +208,41 @@ export async function initPhysics() {
         return y + x * deltaT
       }
 
-      let k1, k2, k3, k4
-      k1 = [f(a[0], v[0]), f(a[1], v[1]), f(a[2], v[2])]
-      k2 = [f(a[0] + deltaT / 2, v[0] + deltaT / 2 * k1[0]), f(a[1] + deltaT / 2, v[1] + deltaT / 2 * k1[1]), f(a[2] + deltaT / 2, v[2] + deltaT / 2 * k1[2])]
-      k3 = [f(a[0] + deltaT / 2, v[0] + deltaT / 2 * k2[0]), f(a[1] + deltaT / 2, v[1] + deltaT / 2 * k2[1]), f(a[2] + deltaT / 2, v[2] + deltaT / 2 * k2[2])]
-      k4 = [f(a[0] + deltaT, v[0] + deltaT * k3[0]), f(a[1] + deltaT, v[1] + deltaT * k3[1]), f(a[2] + deltaT, v[2] + deltaT * k3[2])]
+      let k1, k2, k3, k4, k5, k6
+      k1 = [
+        deltaT * f(a[0], v[0]),
+        deltaT * f(a[1], v[1]),
+        deltaT * f(a[2], v[2])
+      ]
+      k2 = [
+        deltaT * f(a[0] + deltaT / 4, v[0] + k1[0] / 4),
+        deltaT * f(a[1] + deltaT / 4, v[1] + k1[1] / 4),
+        deltaT * f(a[2] + deltaT / 4, v[2] + k1[2] / 4)
+      ]
+      k3 = [
+        deltaT * f(a[0] + deltaT / 2, v[0] + k1[0] / 2),
+        deltaT * f(a[1] + deltaT / 2, v[1] + k1[1] / 2),
+        deltaT * f(a[2] + deltaT / 2, v[2] + k1[2] / 2)
+      ]
+      k4 = [
+        deltaT * f(a[0] + deltaT / 2, v[0] + k1[0] / 7 + 2 * k2[0] / 7 + k3[0] / 14),
+        deltaT * f(a[1] + deltaT / 2, v[1] + k1[1] / 7 + 2 * k2[1] / 7 + k3[1] / 14),
+        deltaT * f(a[2] + deltaT / 2, v[2] + k1[2] / 7 + 2 * k2[2] / 7 + k3[2] / 14)
+      ]
+      k5 = [
+        deltaT * f(a[0] + 3 * deltaT / 4, v[0] + 3 * k1[0] / 8 - k3[0] / 2 + 7 * k4[0] / 8),
+        deltaT * f(a[1] + 3 * deltaT / 4, v[1] + 3 * k1[1] / 8 - k3[1] / 2 + 7 * k4[1] / 8),
+        deltaT * f(a[2] + 3 * deltaT / 4, v[2] + 3 * k1[2] / 8 - k3[2] / 2 + 7 * k4[2] / 8)
+      ]
+      k6 = [
+        deltaT * f(a[0] + deltaT, v[0] - 4 * k1[0] / 7 + 12 * k2[0] / 7 - 2 * k3[0] / 7 - k4[0] + 8 * k5[0] / 7),
+        deltaT * f(a[1] + deltaT, v[1] - 4 * k1[1] / 7 + 12 * k2[1] / 7 - 2 * k3[1] / 7 - k4[1] + 8 * k5[1] / 7),
+        deltaT * f(a[2] + deltaT, v[2] - 4 * k1[2] / 7 + 12 * k2[2] / 7 - 2 * k3[2] / 7 - k4[2] + 8 * k5[2] / 7)
+      ]
 
-      newPositions[i + 0] = p[0] + deltaT / 6.0 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0])
-      newPositions[i + 1] = p[1] + deltaT / 6.0 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])
-      newPositions[i + 2] = p[2] + deltaT / 6.0 * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2])
+      newPositions[i + 0] = p[0] + 7 / 90 * (k1[0] + k6[0]) + 16 / 45 * (k2[0] + k5[0]) - k3[0] / 3 + 7 * k4[0] / 15
+      newPositions[i + 1] = p[1] + 7 / 90 * (k1[1] + k6[1]) + 16 / 45 * (k2[1] + k5[1]) - k3[1] / 3 + 7 * k4[1] / 15
+      newPositions[i + 2] = p[2] + 7 / 90 * (k1[2] + k6[2]) + 16 / 45 * (k2[2] + k5[2]) - k3[2] / 3 + 7 * k4[2] / 15
 
       velocities[i + 0] = v[0] + a[0] * deltaT
       velocities[i + 1] = v[1] + a[1] * deltaT
