@@ -2,12 +2,14 @@ export async function initPhysics() {
   const particleStep = 4
 
   let positions = new Float32Array(0)
-  let newPositions = new Float32Array(positions.length)
+  let displacements = new Float32Array(positions.length)
   let normals = new Float32Array(0)
   let velocities = []
+  let newVelocities = []
   let windSourcePoint = [0, 0, 1]
 
   let forces = []
+  let vFlat = []
 
   let dx = 0;
   let dy = 0;
@@ -18,11 +20,11 @@ export async function initPhysics() {
   const gravity = [0, 10.0, 0]
   const particleMass = 1.1
   const particleInvMass = 1.0 / particleMass
-  const springK = 100000.0
-  const deltaT = 0.00001
+  const springK = 1000.0
+  const deltaT = 0.001
   const dampingConst = -10.0
 
-  const forceMul = 10000
+  const forceMul = 100
 
   const length = (vec) => {
     return Math.sqrt(vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2)
@@ -38,10 +40,16 @@ export async function initPhysics() {
     vecA[1] = vecA[1] - vecB[1]
     vecA[2] = vecA[2] - vecB[2]
   }
+  const add = (vecA, vecB) => {
+    return [vecA[0] + vecB[0], vecA[1] + vecB[1], vecA[2] + vecB[2]]
+  }
   const placeAdd = (vecA, vecB) => {
     vecA[0] = vecA[0] + vecB[0]
     vecA[1] = vecA[1] + vecB[1]
     vecA[2] = vecA[2] + vecB[2]
+  }
+  const mul = (vecA, vecB) => {
+    return [vecA[0] * vecB[0], vecA[1] * vecB[1], vecA[2] * vecB[2]]
   }
   const mulConst = (vec, num) => {
     return [vec[0] * num, vec[1] * num, vec[2] * num]
@@ -51,6 +59,12 @@ export async function initPhysics() {
   }
   const cross = (vecA, vecB) => {
     return [vecA[1] * vecB[2] - vecA[2] * vecB[1], vecA[2] * vecB[0] - vecA[0] * vecB[2], vecA[0] * vecB[1] - vecA[1] * vecB[0]]
+  }
+  const dot = (vecA, vecB) => {
+    return vecA[0] * vecB[0] + vecA[1] * vecB[1] + vecA[2] * vecB[2]
+  }
+  const lerp = (vecA, vecB, s) => {
+    return add(vecA, mulConst(sub(vecB, vecA), s))
   }
 
   function getData() {
@@ -90,11 +104,14 @@ export async function initPhysics() {
     }
 
     positions = new Float32Array(initPos)
-    newPositions = new Float32Array(positions.length)
+    displacements = new Float32Array(positions.length)
   }
 
   function initVelocities(nParticles) {
     velocities = Array.from({ length: nParticles.x * nParticles.y * 4 }).map(() => 0.0)
+    newVelocities = Array.from({ length: nParticles.x * nParticles.y * 4 }).map(() => 0.0)
+
+    vFlat = Array.from({ length: nParticles.x * nParticles.y }).map(() => null)
   }
 
   function initNormals(nParticles) {
@@ -102,9 +119,9 @@ export async function initPhysics() {
   }
 
   function tick({ nParticles }) {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       moveParticles({ nParticles })
-      ;[positions, newPositions] = [newPositions, positions]
+      ;[velocities, newVelocities] = [newVelocities, velocities]
     }
     computeNormals({ nParticles })
   }
@@ -112,6 +129,15 @@ export async function initPhysics() {
   function fire(x, y) {
     const len = length([x, y, -0.5])
     windSourcePoint = mulConst(normalize([x, y, 1], len), dampingConst)
+  }
+  function addVel(idx, v) {
+    if (vFlat[idx] === null) {
+      vFlat[idx] = v
+
+      return
+    }
+
+    placeAdd(vFlat[idx], v)
   }
 
   function moveParticles({ nParticles }) {
@@ -170,7 +196,6 @@ export async function initPhysics() {
 
 
     for (let i = 0; i < positions.length; i += particleStep) {
-      const p = getParticle(positions, i)
       const v = getParticle(velocities, i)
 
       const particleFlatIndex = Math.trunc(i / particleStep)
@@ -187,13 +212,13 @@ export async function initPhysics() {
           x === nParticles.x - 1
         )
       ) {
-        newPositions[i + 0] = p[0]
-        newPositions[i + 1] = p[1]
-        newPositions[i + 2] = p[2]
+        displacements[i + 0] = 0
+        displacements[i + 1] = 0
+        displacements[i + 2] = 0
 
-        velocities[i + 0] = 0
-        velocities[i + 1] = 0
-        velocities[i + 2] = 0
+        newVelocities[i + 0] = 0
+        newVelocities[i + 1] = 0
+        newVelocities[i + 2] = 0
 
         continue
       }
@@ -240,13 +265,333 @@ export async function initPhysics() {
         deltaT * f(a[2] + deltaT, v[2] - 4 * k1[2] / 7 + 12 * k2[2] / 7 - 2 * k3[2] / 7 - k4[2] + 8 * k5[2] / 7)
       ]
 
-      newPositions[i + 0] = p[0] + 7 / 90 * (k1[0] + k6[0]) + 16 / 45 * (k2[0] + k5[0]) - k3[0] / 3 + 7 * k4[0] / 15
-      newPositions[i + 1] = p[1] + 7 / 90 * (k1[1] + k6[1]) + 16 / 45 * (k2[1] + k5[1]) - k3[1] / 3 + 7 * k4[1] / 15
-      newPositions[i + 2] = p[2] + 7 / 90 * (k1[2] + k6[2]) + 16 / 45 * (k2[2] + k5[2]) - k3[2] / 3 + 7 * k4[2] / 15
+      displacements[i + 0] = 7 / 90 * (k1[0] + k6[0]) + 16 / 45 * (k2[0] + k5[0]) - k3[0] / 3 + 7 * k4[0] / 15
+      displacements[i + 1] = 7 / 90 * (k1[1] + k6[1]) + 16 / 45 * (k2[1] + k5[1]) - k3[1] / 3 + 7 * k4[1] / 15
+      displacements[i + 2] = 7 / 90 * (k1[2] + k6[2]) + 16 / 45 * (k2[2] + k5[2]) - k3[2] / 3 + 7 * k4[2] / 15
 
-      velocities[i + 0] = v[0] + a[0] * deltaT
-      velocities[i + 1] = v[1] + a[1] * deltaT
-      velocities[i + 2] = v[2] + a[2] * deltaT
+      newVelocities[i + 0] = v[0] + a[0] * deltaT
+      newVelocities[i + 1] = v[1] + a[1] * deltaT
+      newVelocities[i + 2] = v[2] + a[2] * deltaT
+    }
+
+    function d(p1, p2, p3, p4) {
+      return (p1[0] - p2[0]) * (p3[0] - p4[0]) + (p1[1] - p2[1]) * (p3[1] - p4[1]) + (p1[2] - p2[2]) * (p3[2] - p4[2])
+    }
+
+    function checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4) {
+      const d1343 = d(p1, p3, p4, p3)
+      const d4321 = d(p4, p3, p2, p1)
+      const d1321 = d(p1, p3, p2, p1)
+      const d4343 = d(p4, p3, p4, p3)
+      const d2121 = d(p2, p1, p2, p1)
+      const s = (d1343 * d4321 - d1321 * d4343) / (d2121 * d4343 - d4321 * d4321)
+      const t = (d1343 + s * d4321 ) / d4343
+
+      // closet points
+      const p21 = sub(p2, p1)
+      const pa = add(p1, mulConst(p21, s))
+      const p43 = sub(p4, p3)
+      const pb = add(p3, mulConst(p43, t))
+
+      let dispa = lerp(disp1, disp2, s)
+      let dispb = lerp(disp3, disp4, t)
+
+      const r = sub(pb, pa)
+      const n = normalize(r, length(r))
+
+      const rad = dot(dispa, n) + dot(dispb, n)
+
+      if (rad < 0.001) {
+        return { n, s, t }
+      }
+
+      return null
+    }
+
+    const e = 0.5
+    function applyCollision(v1, v2, v3, v4, collision) {
+      const vRel = sub(lerp(v1, v2, collision.s), lerp(v3, v4, collision.t))
+      const magnitude = -(1 - e) * dot(vRel, collision.n) / (particleInvMass + particleInvMass)
+
+      return {
+        v1: mulConst(collision.n, magnitude * (collision.s - 1)),
+        v2: mulConst(collision.n, magnitude * -collision.s),
+        v3: mulConst(collision.n, magnitude * (1 - collision.t)),
+        v4: mulConst(collision.n, magnitude * collision.t),
+      }
+    }
+
+    for (let i = 0; i < positions.length; i += particleStep) {
+      const p1 = getParticle(positions, i)
+      const disp1 = getParticle(displacements, i)
+      const v1 = getParticle(velocities, i)
+
+      const particleFlatIndex1 = Math.trunc(i / particleStep)
+      const x = particleFlatIndex1 % nParticles.x
+      const y = Math.trunc((particleFlatIndex1 - x) / nParticles.x)
+
+      if (y < nParticles.y - 1) {
+        const i2 = (particleFlatIndex1 + nParticles.x) * particleStep
+        const p2 = getParticle(positions, i2)
+        const disp2 = getParticle(displacements, i2)
+        const v2 = getParticle(velocities, i2)
+
+        const particleFlatIndex2 = Math.trunc(i2 / particleStep)
+
+        for (let j = i + particleStep; j < positions.length; j += particleStep) {
+          const p3 = getParticle(positions, j)
+          const disp3 = getParticle(displacements, j)
+          const v3 = getParticle(velocities, j)
+
+          const particleFlatIndex3 = Math.trunc(j / particleStep)
+          const x = particleFlatIndex3 % nParticles.x
+          const y = Math.trunc((particleFlatIndex3 - x) / nParticles.x)
+
+          if (y < nParticles.y - 1) {
+            const j2 = (particleFlatIndex3 + nParticles.x) * particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+          if (x < nParticles.x - 1) {
+            const j2 = j + particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+          if (x < nParticles.x - 1 && y > 0) {
+            const j2 = (particleFlatIndex3 - nParticles.x + 1) * particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+        }
+      }
+      if (x < nParticles.x - 1) {
+        const i2 = i + particleStep
+        const p2 = getParticle(positions, i2)
+        const disp2 = getParticle(displacements, i2)
+        const v2 = getParticle(velocities, i2)
+
+        const particleFlatIndex2 = Math.trunc(i2 / particleStep)
+
+        for (let j = i + particleStep; j < positions.length; j += particleStep) {
+          const p3 = getParticle(positions, j)
+          const disp3 = getParticle(displacements, j)
+          const v3 = getParticle(velocities, j)
+
+          const particleFlatIndex3 = Math.trunc(j / particleStep)
+          const x = particleFlatIndex3 % nParticles.x
+          const y = Math.trunc((particleFlatIndex3 - x) / nParticles.x)
+
+          if (y < nParticles.y - 1) {
+            const j2 = (particleFlatIndex3 + nParticles.x) * particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+          if (x < nParticles.x - 1) {
+            const j2 = j + particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+          if (x < nParticles.x - 1 && y > 0) {
+            const j2 = (particleFlatIndex3 - nParticles.x + 1) * particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+        }
+
+      }
+      if (x < nParticles.x - 1 && y < nParticles.y - 1) {
+        const i2 = (particleFlatIndex1 + nParticles.x + 1) * particleStep
+        const p2 = getParticle(positions, i2)
+        const disp2 = getParticle(displacements, i2)
+        const v2 = getParticle(velocities, i2)
+
+        const particleFlatIndex2 = Math.trunc(i2 / particleStep)
+
+        for (let j = i + particleStep; j < positions.length; j += particleStep) {
+          const p3 = getParticle(positions, j)
+          const disp3 = getParticle(displacements, j)
+          const v3 = getParticle(velocities, j)
+
+          const particleFlatIndex3 = Math.trunc(j / particleStep)
+          const x = particleFlatIndex3 % nParticles.x
+          const y = Math.trunc((particleFlatIndex3 - x) / nParticles.x)
+
+          if (y < nParticles.y - 1) {
+            const j2 = (particleFlatIndex3 + nParticles.x) * particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+          if (x < nParticles.x - 1) {
+            const j2 = j + particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+          if (x < nParticles.x - 1 && y > 0) {
+            const j2 = (particleFlatIndex3 - nParticles.x + 1) * particleStep
+
+            if (i2 !== j) {
+              const p4 = getParticle(positions, j2)
+              const disp4 = getParticle(displacements, j2)
+              const v4 = getParticle(velocities, j2)
+
+              const particleFlatIndex4 = Math.trunc(j2 / particleStep)
+
+              const clsn = checkCollision(p1, p2, p3, p4, disp1, disp2, disp3, disp4)
+
+              if (clsn) {
+                const newVs = applyCollision(v1, v2, v3, v4, clsn)
+                addVel(particleFlatIndex1, newVs.v1)
+                addVel(particleFlatIndex2, newVs.v2)
+                addVel(particleFlatIndex3, newVs.v3)
+                addVel(particleFlatIndex4, newVs.v4)
+              }
+            }
+          }
+        }
+      }
+
+      positions[i + 0] = p1[0] + displacements[i + 0]
+      positions[i + 1] = p1[1] + displacements[i + 1]
+      positions[i + 2] = p1[2] + displacements[i + 2]
+    }
+
+    for (let i = 0; i < vFlat.length; i++) {
+      const offset = i * 4;
+      if (vFlat[i]) {
+        const v = vFlat[i]
+        newVelocities[offset + 0] = v[0]
+        newVelocities[offset + 1] = v[1]
+        newVelocities[offset + 2] = v[2]
+        vFlat[i] = null
+      }
     }
   }
 

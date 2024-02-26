@@ -33,7 +33,7 @@ async function main() {
     let lastTs = 0
     let framesDrawn = 0
 
-    const clothParticlesNum = { x: 25, y: 25 }
+    const clothParticlesNum = { x: 10, y: 8 }
     const clothSize = [1.0, 1.0]
     generatePhysicCloth(clothParticlesNum, clothSize)
 
